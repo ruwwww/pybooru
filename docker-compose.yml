@@ -1,0 +1,18 @@
+services:
+  viewer:
+    build: .
+    container_name: hoard-viewer
+    command: python viewer.py
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./hoard:/app/hoard
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    container_name: hoard-scheduler
+    command: python scheduler.py
+    volumes:
+      - ./hoard:/app/hoard
+    restart: unless-stopped

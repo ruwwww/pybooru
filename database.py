@@ -2,7 +2,9 @@ import sqlite3
 import os
 from datetime import datetime
 
-DB_PATH = "hoard.db"
+# Store DB in the hoard directory for easier container persistence
+os.makedirs("hoard", exist_ok=True)
+DB_PATH = os.path.join("hoard", "hoard.db")
 
 class Database:
     def __init__(self, db_path=DB_PATH):
@@ -43,6 +45,7 @@ class Database:
                 timestamp DATETIME,
                 shard_file TEXT,
                 offset INTEGER,
+                size INTEGER,
                 FOREIGN KEY(artist_id) REFERENCES artists(id)
             )
         """)

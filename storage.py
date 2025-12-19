@@ -4,27 +4,35 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from datetime import datetime
 
-PARQUET_DIR = os.path.join("hoard", "parquet")
-SHARD_SIZE_LIMIT_MB = 500
+PARQUET_BASE_DIR = os.path.join("hoard", "parquet")
+SHARD_SIZE_LIMIT_MB = 64  # Increased shard size target
 
 class ParquetStorage:
     def __init__(self, source="danbooru"):
         self.source = source
         self.buffer = []
         self.seen_hashes = set()
-        self.current_shard_index = self._get_next_shard_index()
         self.buffer_size_bytes = 0
+        
+        # Ensure source directory exists
+        self.source_dir = os.path.join(PARQUET_BASE_DIR, self.source)
+        os.makedirs(self.source_dir, exist_ok=True)
+        
+        self.current_shard_index = self._get_next_shard_index()
 
     def _get_next_shard_index(self):
-        existing_files = [f for f in os.listdir(PARQUET_DIR) if f.startswith(f"{self.source}_") and f.endswith(".parquet")]
+        if not os.path.exists(self.source_dir):
+            return 0
+            
+        existing_files = [f for f in os.listdir(self.source_dir) if f.endswith(".parquet")]
         if not existing_files:
             return 0
         
         indices = []
         for f in existing_files:
             try:
-                # Extract index from filename: source_0001.parquet
-                part = f.replace(f"{self.source}_", "").replace(".parquet", "")
+                # Extract index from filename: shard_0001.parquet
+                part = f.replace("shard_", "").replace(".parquet", "")
                 indices.append(int(part))
             except ValueError:
                 continue
@@ -44,7 +52,8 @@ class ParquetStorage:
             "source": self.source,
             "post_id": post_id,
             "hash": image_hash,
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "size": len(image_bytes)
         }
         
         self.buffer.append(row)
@@ -61,8 +70,9 @@ class ParquetStorage:
         if not self.buffer:
             return None
 
-        shard_filename = f"{self.source}_{self.current_shard_index:04d}.parquet"
-        shard_path = os.path.join(PARQUET_DIR, shard_filename)
+        # Filename is now just shard_XXXX.parquet, but stored inside the source folder
+        shard_filename = f"shard_{self.current_shard_index:04d}.parquet"
+        shard_path = os.path.join(self.source_dir, shard_filename)
 
         df = pd.DataFrame(self.buffer)
         table = pa.Table.from_pandas(df)
@@ -70,11 +80,15 @@ class ParquetStorage:
         # Write to Parquet
         pq.write_table(table, shard_path)
         
-        print(f"Flushed {len(self.buffer)} images to {shard_filename}")
+        print(f"Flushed {len(self.buffer)} images to {shard_path}")
 
         # Return info for database update
+        # We return the relative path from PARQUET_BASE_DIR so the viewer can find it easily
+        # e.g. "danbooru/shard_0001.parquet"
+        relative_path = os.path.join(self.source, shard_filename).replace("\\", "/")
+        
         result = {
-            "shard_file": shard_filename,
+            "shard_file": relative_path,
             "count": len(self.buffer),
             "rows": self.buffer # Return rows so we can update DB with offsets if needed
         }

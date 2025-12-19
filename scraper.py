@@ -85,9 +85,9 @@ class AsyncScraper:
             try:
                 # Insert into images
                 self.db.cursor.execute("""
-                    INSERT INTO images (artist_id, source, post_id, hash, timestamp, shard_file, offset)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (row['artist_id'], row['source'], row['post_id'], row['hash'], row['timestamp'], shard_file, i))
+                    INSERT INTO images (artist_id, source, post_id, hash, timestamp, shard_file, offset, size)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (row['artist_id'], row['source'], row['post_id'], row['hash'], row['timestamp'], shard_file, i, row['size']))
                 
                 image_id = self.db.cursor.lastrowid
                 
