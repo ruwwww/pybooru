@@ -56,13 +56,23 @@ class Scheduler:
                 artist = self.select_artist()
                 
                 if artist == "empty":
-                    logger.info("No artists found in database. Waiting 10 seconds...")
-                    await asyncio.sleep(10)
+                    logger.info("No artists found in database. Waiting for artists...")
+                    # Smart sleep: check every second for new artists
+                    for _ in range(60):
+                        if self.db.get_pending_count() > 0:
+                            logger.info("New artist detected! Waking up.")
+                            break
+                        await asyncio.sleep(1)
                     continue
                 
                 if artist == "cooldown":
-                    logger.info("All artists are on cooldown. Waiting 10 seconds...")
-                    await asyncio.sleep(10)
+                    logger.info("All artists are on cooldown. Waiting...")
+                    # Smart sleep: check every second for new artists
+                    for _ in range(60):
+                        if self.db.get_pending_count() > 0:
+                            logger.info("New artist detected! Waking up.")
+                            break
+                        await asyncio.sleep(1)
                     continue
 
                 logger.info(f"Selected artist: {artist['name']} (Weight: {artist['probability_weight']})")

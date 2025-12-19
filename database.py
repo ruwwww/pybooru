@@ -82,6 +82,10 @@ class Database:
         self.cursor.execute("SELECT * FROM artists")
         return self.cursor.fetchall()
 
+    def get_pending_count(self):
+        self.cursor.execute("SELECT COUNT(*) FROM artists WHERE last_checked IS NULL")
+        return self.cursor.fetchone()[0]
+
     def close(self):
         if self.conn:
             self.conn.close()
