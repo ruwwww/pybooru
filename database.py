@@ -63,10 +63,11 @@ class Database:
 
     def add_artist(self, name, source='danbooru', favorite=False):
         try:
+            # Set last_checked to NULL so it gets picked up immediately by the scheduler
             self.cursor.execute("""
                 INSERT INTO artists (name, source, favorite, probability_weight, last_checked)
                 VALUES (?, ?, ?, ?, ?)
-            """, (name, source, favorite, 10.0 if favorite else 1.0, datetime.now()))
+            """, (name, source, favorite, 10.0 if favorite else 1.0, None))
             self.conn.commit()
             return self.cursor.lastrowid
         except sqlite3.Error as e:
