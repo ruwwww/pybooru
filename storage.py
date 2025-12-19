@@ -64,8 +64,8 @@ class ParquetStorage:
              self.buffer_size_bytes = 0
 
     def add_image(self, image_bytes, artist_id, post_id, image_hash, timestamp=None):
-        if image_hash in self.seen_hashes:
-            return None
+        # if image_hash in self.seen_hashes:
+        #     return None
 
         if timestamp is None:
             timestamp = datetime.now()
