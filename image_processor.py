@@ -12,8 +12,8 @@ import pyvips
 
 # Configuration
 MAX_DIMENSION = 850
-WEBP_QUALITY_MAX = 65
-WEBP_QUALITY_MIN = 60
+WEBP_QUALITY_MAX = 75
+WEBP_QUALITY_MIN = 70
 
 def process_image_bytes(image_bytes):
     """
@@ -48,7 +48,7 @@ def process_image_bytes(image_bytes):
         aspect_ratio = max(w, h) / min(w, h) if min(w, h) > 0 else 1
 
         ratio_threshold_low = 1.3
-        ratio_threshold_high = 2
+        ratio_threshold_high = 1.7
         
         if aspect_ratio <= ratio_threshold_low:
             q_value = WEBP_QUALITY_MAX

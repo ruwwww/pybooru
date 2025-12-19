@@ -41,7 +41,7 @@ class AsyncScraper:
         # if self.db.cursor.fetchone():
         #     return
 
-        file_url = post.get('large_file_url') or post.get('file_url')
+        file_url = post.get('file_url')
         if not file_url:
             return
 

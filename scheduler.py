@@ -1,7 +1,7 @@
 import asyncio
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from database import Database
 from scraper import AsyncScraper
 
@@ -13,17 +13,39 @@ class Scheduler:
     def __init__(self):
         self.db = Database()
         self.scraper = AsyncScraper()
+        self.cooldown_minutes = 60  # Don't check the same artist twice in an hour
 
     def select_artist(self):
         artists = self.db.get_all_artists()
         if not artists:
-            return None
+            return "empty"
         
-        # Filter out artists checked very recently (optional, e.g., within last hour)
-        # For now, just use weights
+        available_artists = []
+        for a in artists:
+            last_checked = a['last_checked']
+            if last_checked:
+                # Parse datetime string if necessary (SQLite stores as string)
+                if isinstance(last_checked, str):
+                    try:
+                        # Handle potential fractional seconds
+                        if "." in last_checked:
+                            last_checked = datetime.strptime(last_checked, "%Y-%m-%d %H:%M:%S.%f")
+                        else:
+                            last_checked = datetime.strptime(last_checked, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        # If parsing fails, assume it's old and needs checking
+                        last_checked = datetime.min
+
+                if datetime.now() - last_checked < timedelta(minutes=self.cooldown_minutes):
+                    continue
+            
+            available_artists.append(a)
+
+        if not available_artists:
+            return "cooldown"
         
-        weights = [a['probability_weight'] for a in artists]
-        selected = random.choices(artists, weights=weights, k=1)[0]
+        weights = [a['probability_weight'] for a in available_artists]
+        selected = random.choices(available_artists, weights=weights, k=1)[0]
         return selected
 
     async def run(self):
@@ -32,9 +54,16 @@ class Scheduler:
         try:
             while True:
                 artist = self.select_artist()
-                if not artist:
-                    logger.info("No artists found in database. Please seed the database.")
-                    break
+                
+                if artist == "empty":
+                    logger.info("No artists found in database. Waiting 60 seconds...")
+                    await asyncio.sleep(60)
+                    continue
+                
+                if artist == "cooldown":
+                    logger.info("All artists are on cooldown. Waiting 60 seconds...")
+                    await asyncio.sleep(60)
+                    continue
 
                 logger.info(f"Selected artist: {artist['name']} (Weight: {artist['probability_weight']})")
                 
