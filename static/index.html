@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Booru Downloader</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      h1 {
+        color: #333;
+      }
+      .card {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+      .status-running {
+        color: #007bff;
+        font-weight: bold;
+      }
+      .status-completed {
+        color: #28a745;
+        font-weight: bold;
+      }
+      .status-failed {
+        color: #dc3545;
+        font-weight: bold;
+      }
+      .status-pending {
+        color: #ffc107;
+        font-weight: bold;
+      }
+      .status-cancelled {
+        color: #6c757d;
+        font-weight: bold;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+      }
+      th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+      }
+
+      .form-group {
+        margin-bottom: 15px;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button.cancel-btn {
+        background-color: #dc3545;
+        font-size: 14px;
+        padding: 5px 10px;
+      }
+      button.cancel-btn:hover {
+        background-color: #c82333;
+      }
+
+      .progress-bar-container {
+        width: 100%;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        height: 10px;
+        margin-top: 5px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        background-color: #28a745;
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Booru Downloader Manager</h1>
+
+    <div class="card">
+      <h2>Submit New Job</h2>
+      <form id="jobForm">
+        <div class="form-group">
+          <input
+            type="text"
+            id="tags"
+            placeholder="Enter tags (e.g. artist_name)"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="force" /> Force Download (Overwrite
+            existing files)
+          </label>
+        </div>
+        <button type="submit">Add to Queue</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        "
+      >
+        <h2>Job Queue</h2>
+        <button onclick="cancelCurrent()" class="cancel-btn">
+          Cancel Running Job
+        </button>
+      </div>
+      <table id="jobsTable">
+        <thead>
+          <tr>
+            <th style="width: 20%">Tags</th>
+            <th style="width: 10%">Status</th>
+            <th style="width: 40%">Progress</th>
+            <th style="width: 30%">Message</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <script>
+      const form = document.getElementById("jobForm");
+      const tableBody = document.querySelector("#jobsTable tbody");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const tags = document.getElementById("tags").value;
+        const force = document.getElementById("force").checked;
+
+        try {
+          const response = await fetch("/api/jobs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tags, force }),
+          });
+          if (response.ok) {
+            document.getElementById("tags").value = "";
+            fetchJobs();
+          }
+        } catch (error) {
+          console.error("Error submitting job:", error);
+        }
+      });
+
+      async function cancelCurrent() {
+        if (
+          !confirm("Are you sure you want to cancel the currently running job?")
+        )
+          return;
+        try {
+          await fetch("/api/jobs/cancel", { method: "POST" });
+        } catch (error) {
+          console.error("Error cancelling job:", error);
+        }
+      }
+
+      async function fetchJobs() {
+        try {
+          const response = await fetch("/api/jobs");
+          const jobs = await response.json();
+          renderJobs(jobs);
+        } catch (error) {
+          console.error("Error fetching jobs:", error);
+        }
+      }
+
+      function renderJobs(jobs) {
+        tableBody.innerHTML = "";
+        jobs.forEach((job) => {
+          const row = document.createElement("tr");
+
+          let progressHtml = "";
+          if (job.status === "downloading" || job.status === "completed") {
+            const total = job.total || 0;
+            const completed = job.success || 0; // Using success count for progress bar
+            const percent =
+              total > 0 ? Math.round((completed / total) * 100) : 0;
+            progressHtml = `
+                        <div>${completed} / ${total} images</div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: ${percent}%"></div>
+                        </div>
+                    `;
+          } else {
+            progressHtml = "-";
+          }
+
+          row.innerHTML = `
+                    <td><strong>${job.tags}</strong><br><small>${
+            job.force ? "(Force)" : ""
+          }</small></td>
+                    <td><span class="status-${
+                      job.status
+                    }">${job.status.toUpperCase()}</span></td>
+                    <td>${progressHtml}</td>
+                    <td><small>${job.message || ""}</small></td>
+                `;
+          tableBody.appendChild(row);
+        });
+      }
+
+      // Poll every 2 seconds
+      setInterval(fetchJobs, 2000);
+      fetchJobs();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+downloads/
+hoard/
+*.db
+trash-vault/
+.env
+.venv/
+venv/
+*.ipynb_checkpoints
