@@ -12,6 +12,9 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Configuration
+DEDUPLICATE_IMAGES = False  # Set to True to enable hash-based deduplication
+
 class AsyncScraper:
     def __init__(self):
         self.db = Database()
@@ -65,10 +68,11 @@ class AsyncScraper:
             return
 
         # Check Hash Index (Deduplication)
-        self.db.cursor.execute("SELECT image_id FROM hash_index WHERE hash = ?", (image_hash,))
-        if self.db.cursor.fetchone():
-            logger.info(f"Duplicate found for post {post_id} (hash: {image_hash}). Skipping.")
-            return
+        if DEDUPLICATE_IMAGES:
+            self.db.cursor.execute("SELECT image_id FROM hash_index WHERE hash = ?", (image_hash,))
+            if self.db.cursor.fetchone():
+                logger.info(f"Duplicate found for post {post_id} (hash: {image_hash}). Skipping.")
+                return
 
         # Add to Storage (Buffer)
         flush_result = self.storage.add_image(compressed_bytes, artist_id, post_id, image_hash)
@@ -80,6 +84,7 @@ class AsyncScraper:
     def _update_db_from_flush(self, flush_result):
         shard_file = flush_result['shard_file']
         rows = flush_result['rows']
+        start_offset = flush_result.get('start_offset', 0)
         
         for i, row in enumerate(rows):
             try:
@@ -87,7 +92,7 @@ class AsyncScraper:
                 self.db.cursor.execute("""
                     INSERT INTO images (artist_id, source, post_id, hash, timestamp, shard_file, offset, size)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (row['artist_id'], row['source'], row['post_id'], row['hash'], row['timestamp'], shard_file, i, row['size']))
+                """, (row['artist_id'], row['source'], row['post_id'], row['hash'], row['timestamp'], shard_file, start_offset + i, row['size']))
                 
                 image_id = self.db.cursor.lastrowid
                 
@@ -112,7 +117,8 @@ class AsyncScraper:
             while True:
                 # Fetch metadata (Sync call wrapped in executor if needed, but fast enough)
                 try:
-                    posts = self.client.post_list(tags=f"{artist_name} -animated", page=page, limit=20)
+                    # Increased limit to 100 (max for most boorus) and removed page limit
+                    posts = self.client.post_list(tags=f"{artist_name} -animated", page=page, limit=100)
                 except Exception as e:
                     logger.error(f"Error fetching posts for {artist_name}: {e}")
                     break
@@ -140,9 +146,9 @@ class AsyncScraper:
                 await asyncio.gather(*tasks)
                 page += 1
                 
-                # Safety break
-                if page > 10: # Limit pages for MVP testing
-                    break
+                # Safety break removed to allow full scraping
+                # if page > 10: 
+                #    break
 
         # Final flush
         flush_result = self.storage.flush()
